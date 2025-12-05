@@ -51,18 +51,40 @@ class LocaleNumbers
      * @return Array the arguments
      */
 
-    public function filterPriceArgs($args)
-    {
-        //don't touch values on admin screens, save as plain number using woo defaults
-        if ((!is_admin()) || isset($_REQUEST['get_product_price_by_ajax'])) {
-            $locale = pll_current_language('locale');
-            $a = new \NumberFormatter($locale, \NumberFormatter::DECIMAL);
-            if ($a) {
-                $args['decimal_separator'] = $a->getSymbol(\NumberFormatter::DECIMAL_SEPARATOR_SYMBOL);
-                $args['thousand_separator'] = $a->getSymbol(\NumberFormatter::GROUPING_SEPARATOR_SYMBOL);
-                $args['decimals'] = $a->getAttribute(\NumberFormatter::FRACTION_DIGITS);
-            }
+    public function filterPriceArgs( $args ) {
+        // Extraire les valeurs nécessaires depuis $args
+        $price   = $args['price'] ?? 0;
+        $currency = $args['currency'] ?? 'EUR';
+        $locale  = $args['locale'] ?? get_locale();
+
+        // Extraire la locale de base (sans les paramètres @)
+        $baseLocale = preg_replace('/@.*/', '', $locale);
+
+        // Vérifier si la locale est valide
+        if (empty($baseLocale) || !\NumberFormatter::create($baseLocale, \NumberFormatter::CURRENCY)) {
+            $baseLocale = 'en_US'; // Fallback
         }
+
+        // Créer le formateur avec la locale valide
+        try {
+            $formatter = new \NumberFormatter($baseLocale, \NumberFormatter::CURRENCY);
+
+            // Si le paramètre @currency=EUR est présent, forcer le symbole €
+            if (strpos($locale, '@currency=EUR') !== false) {
+                $formatter->setSymbol(\NumberFormatter::CURRENCY_SYMBOL, '€');
+            }
+
+            // Appliquer le formatage
+            $formatted = $formatter->formatCurrency($price, $currency);
+
+            // Remplacer le prix formaté dans les arguments
+            $args['formatted_price'] = $formatted;
+
+        } catch (\Exception $e) {
+            // En cas d'erreur, utiliser un formatage simple
+            $args['formatted_price'] = number_format($price, 2, ',', ' ') . ' €';
+        }
+
         return $args;
     }
 
